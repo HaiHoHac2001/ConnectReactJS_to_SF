@@ -1,0 +1,145 @@
+const express = require('express');
+const router = express.Router();
+const axios = require('axios');
+
+/**
+ * POST /api/auth/get-token
+ * Get Salesforce access token using OAuth2 password flow
+ */
+router.post('/get-token', async (req, res) => {
+  try {
+    console.log('🚀 Getting Salesforce access token...');
+    
+    const loginUrl = process.env.SF_LOGIN_URL
+    const clientId = process.env.SF_CLIENT_ID;
+    const clientSecret = process.env.SF_CLIENT_SECRET;
+    const username = process.env.SF_USERNAME;
+    const password = process.env.SF_PASSWORD;
+
+    // Debug environment variables
+    console.log('🔍 Environment variables check:');
+    console.log('SF_CLIENT_ID:', clientId ? `${clientId.substring(0, 10)}...` : 'MISSING');
+    console.log('SF_CLIENT_SECRET:', clientSecret ? `${clientSecret.substring(0, 10)}...` : 'MISSING');
+    console.log('SF_USERNAME:', username || 'MISSING');
+    console.log('SF_PASSWORD:', password ? '***' : 'MISSING');
+
+    // Validate required environment variables
+    if (!clientId || !clientSecret || !username || !password) {
+      console.log('❌ Missing environment variables!');
+      return res.status(500).json({
+        success: false,
+        error: 'Missing required Salesforce credentials in environment variables',
+        debug: {
+          clientId: !!clientId,
+          clientSecret: !!clientSecret,
+          username: !!username,
+          password: !!password
+        }
+      });
+    }
+
+    // OAuth2 password flow
+    const tokenUrl = `${loginUrl}/services/oauth2/token`;
+    const params = new URLSearchParams();
+    params.append('grant_type', 'password');
+    params.append('client_id', clientId);
+    params.append('client_secret', clientSecret);
+    params.append('username', username);
+    params.append('password', password);
+
+    const response = await axios.post(tokenUrl, params, {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    });
+
+    const { access_token, instance_url } = response.data;
+
+    console.log('✅ Salesforce access token obtained');
+
+    res.json({
+      success: true,
+      accessToken: access_token,
+      instanceUrl: instance_url,
+      message: 'Access token obtained successfully'
+    });
+
+  } catch (error) {
+    console.error('❌ Token error:', error);
+    
+    res.status(401).json({
+      success: false,
+      error: 'Failed to get Salesforce access token',
+      details: process.env.NODE_ENV === 'development' ? error.response?.data : undefined
+    });
+  }
+});
+
+/**
+ * POST /api/auth/login
+ * Login user using Salesforce custom API
+ */
+router.post('/login', async (req, res) => {
+  try {
+    const { email, password, accessToken } = req.body;
+
+    // Validate input
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        error: 'Email and password are required'
+      });
+    }
+
+    if (!accessToken) {
+      return res.status(400).json({
+        success: false,
+        error: 'Salesforce access token is required'
+      });
+    }
+
+    console.log(`🔐 Attempting login for: ${email}`);
+
+    // Call Salesforce custom REST API
+    const salesforceApiUrl = 'https://japanese-listening-dev-ed.develop.my.salesforce.com/services/apexrest/api/login';
+    
+    const loginResponse = await axios.post(salesforceApiUrl, {
+      email: email,
+      password: password
+    }, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    console.log('✅ Login successful');
+
+    res.json({
+      success: true,
+      data: loginResponse.data,
+      message: 'Login successful'
+    });
+
+  } catch (error) {
+    console.error('❌ Login error:', error);
+    
+    let errorMessage = 'Login failed';
+    
+    if (error.response?.status === 401) {
+      errorMessage = 'Invalid credentials or expired token';
+    } else if (error.response?.status === 404) {
+      errorMessage = 'User not found';
+    } else if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    }
+
+    res.status(error.response?.status || 500).json({
+      success: false,
+      error: errorMessage,
+      details: process.env.NODE_ENV === 'development' ? error.response?.data : undefined
+    });
+  }
+});
+
+module.exports = router;

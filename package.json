@@ -1,0 +1,18 @@
+{
+  "name": "learner-management-system",
+  "version": "1.0.0",
+  "description": "Full-stack application with ReactJS frontend, NodeJS backend, and Salesforce integration for Learner__c object management",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd backend && npm run dev",
+    "client": "cd frontend && npm start",
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install"
+  },
+  "keywords": ["react", "nodejs", "salesforce", "japanese-learning"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
