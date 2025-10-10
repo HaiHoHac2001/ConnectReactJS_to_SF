@@ -210,4 +210,215 @@ router.post("/register", async (req, res) => {
   }
 });
 
+/**
+ * POST /api/auth/forgot-password
+ * Send password reset email using Salesforce custom API
+ */
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email, accessToken } = req.body;
+
+    // Validate input
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        error: "Email is required",
+      });
+    }
+
+    if (!accessToken) {
+      return res.status(400).json({
+        success: false,
+        error: "Salesforce access token is required",
+      });
+    }
+
+    // Call Salesforce custom REST API
+    const salesforceApiUrl =
+      "https://japanese-listening-dev-ed.develop.my.salesforce.com/services/apexrest/api/password/forgot";
+
+    const forgotPasswordResponse = await axios.post(
+      salesforceApiUrl,
+      {
+        email: email,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    res.json({
+      success: true,
+      data: forgotPasswordResponse.data,
+      message: "Password reset email sent successfully",
+    });
+  } catch (error) {
+    console.error("❌ Forgot password error:", error);
+
+    let errorMessage = "Failed to send password reset email";
+
+    if (error.response?.status === 404) {
+      errorMessage = "User not found";
+    } else if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    }
+
+    res.status(error.response?.status || 500).json({
+      success: false,
+      error: errorMessage,
+      details:
+        process.env.NODE_ENV === "development"
+          ? error.response?.data
+          : undefined,
+    });
+  }
+});
+
+/**
+ * POST /api/auth/verify-reset-token
+ * Verify reset password token
+ */
+router.post("/verify-reset-token", async (req, res) => {
+  try {
+    const { token, accessToken } = req.body;
+
+    // Validate input
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        error: "Token is required",
+      });
+    }
+
+    if (!accessToken) {
+      return res.status(400).json({
+        success: false,
+        error: "Salesforce access token is required",
+      });
+    }
+
+    // Call Salesforce custom REST API
+    const salesforceApiUrl =
+      "https://japanese-listening-dev-ed.develop.my.salesforce.com/services/apexrest/api/password/validate";
+
+    const verifyTokenResponse = await axios.post(
+      salesforceApiUrl,
+      {
+        token: token,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    res.json({
+      success: true,
+      data: verifyTokenResponse.data,
+      message: "Token is valid",
+    });
+  } catch (error) {
+    console.error("❌ Verify token error:", error);
+
+    let errorMessage = "Invalid or expired token";
+
+    if (error.response?.status === 404) {
+      errorMessage = "Token not found or expired";
+    } else if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    }
+
+    res.status(error.response?.status || 400).json({
+      success: false,
+      error: errorMessage,
+      details:
+        process.env.NODE_ENV === "development"
+          ? error.response?.data
+          : undefined,
+    });
+  }
+});
+
+/**
+ * POST /api/auth/reset-password
+ * Reset user password using token
+ */
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { token, password, accessToken } = req.body;
+
+    // Validate input
+    if (!token || !password) {
+      return res.status(400).json({
+        success: false,
+        error: "Token and password are required",
+      });
+    }
+
+    if (!accessToken) {
+      return res.status(400).json({
+        success: false,
+        error: "Salesforce access token is required",
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        error: "Password must be at least 6 characters",
+      });
+    }
+
+    // Call Salesforce custom REST API
+    const salesforceApiUrl =
+      "https://japanese-listening-dev-ed.develop.my.salesforce.com/services/apexrest/api/password/reset";
+
+    const resetPasswordResponse = await axios.post(
+      salesforceApiUrl,
+      {
+        token: token,
+        newPassword: password,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    res.json({
+      success: true,
+      data: resetPasswordResponse.data,
+      message: "Password reset successfully",
+    });
+  } catch (error) {
+    console.error("❌ Reset password error:", error);
+
+    let errorMessage = "Failed to reset password";
+
+    if (error.response?.status === 400) {
+      errorMessage = "Invalid token or password requirements not met";
+    } else if (error.response?.status === 404) {
+      errorMessage = "Invalid or expired reset token";
+    } else if (error.response?.data?.message) {
+      errorMessage = error.response.data.message;
+    }
+
+    res.status(error.response?.status || 500).json({
+      success: false,
+      error: errorMessage,
+      details:
+        process.env.NODE_ENV === "development"
+          ? error.response?.data
+          : undefined,
+    });
+  }
+});
+
 module.exports = router;
